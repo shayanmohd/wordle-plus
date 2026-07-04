@@ -1,8 +1,8 @@
 {
-  "name": "game",
+  "name": "wordle-plus",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://modem7.github.io/react-wordle",
+  "homepage": ".",
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",

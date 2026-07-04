@@ -1,78 +1,41 @@
-# React Wordle
+# Wordle Plus
 
-![Docker Pulls](https://img.shields.io/docker/pulls/modem7/wordle)
-![Docker Image Size (tag)](https://img.shields.io/docker/image-size/modem7/wordle/latest)
-[![Build Status](https://drone.modem7.com/api/badges/modem7/react-wordle/status.svg)](https://drone.modem7.com/modem7/react-wordle)
-[![GitHub last commit](https://img.shields.io/github/last-commit/modem7/react-wordle)](react-wordle)
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/modem7/react-wordle/React%20app%20deployement?label=gh%20pages)
+A word-guessing game built with React, TypeScript, and Tailwind CSS. It's the classic daily Wordle, plus two extra ways to play.
 
-This is a clone project of the popular word guessing game we all know and love. Made using React, Typescript, and Tailwind.
+## Features
 
-Modified by [modem7](https://github.com/modem7) for github-pages. 
+- **Daily mode**: one shared word per day, just like the original.
+- **Practice mode**: an endless stream of random words so you can keep playing after the daily is done. Practice runs are entered via a `?mode=practice` URL (so the mode survives a reload and can be shared), tracked with their own separate, resettable statistics, and never touch your daily streak.
+- **Timed mode**: an optional 60 / 120 / 180-second countdown on the daily game. The clock starts on your first letter and turns red in the final seconds; run out and the answer is revealed.
+- Everything from the base game: hard mode, high-contrast mode, dark mode, guess statistics, and shareable results.
 
-[**Try it out!**](https://modem7.github.io/react-wordle/)
+All three modes are chosen from the **Game Mode** menu (the puzzle icon in the navbar). The default experience is unchanged: the classic daily, untimed game.
 
-# Breaking changes note
-This repo has now been merged with the old Worlde repo which had the old NYT container. 
+## Run locally
 
-The reasoning for this is to lower maintenance across multiple repos and reduce build time. 
-
-There is also a [Github pages](https://modem7.github.io/react-wordle/) version of "latest".
-
-As such, there is a new configuration: 
-
-## Latest
-This is a new version of Wordle, created by [cwackerfuss](https://github.com/cwackerfuss/react-wordle), and as such, it will not match with the latest "Word of the day". 
-
-Please see the configuration below to set this up. 
-
-## Legacy
-This is the original Worlde, cloned from the orignal website, and shunted into an Nginx container. This is as close as you'll get to the NYT version, and it should be in line with the latest word of the day. 
-
-This will not be updated, except for security updates and Nginx updates.
-
-Please see the configuration below to set this up.
-
-# Configuration
-
-## Latest
-Note: Sharing feature requires this to be hosted via https as per [#331](https://github.com/cwackerfuss/react-wordle/issues/331#issuecomment-1073155476).
-
-```yaml
-version: "2.4"
-
-services:
-
-  wordle:
-    image: modem7/wordle:latest
-    container_name: Wordle
-    ports:
-      - 80:8080
+```bash
+npm install
+npm start
 ```
 
-## Legacy
+The app runs at `http://localhost:3000`.
 
-```yaml
-version: "2.4"
+## Other scripts
 
-services:
-
-  wordle:
-    image: modem7/wordle:legacy
-    container_name: Wordle
-    ports:
-      - 80:80
+```bash
+npm run build    # production build
+npm test         # run the test suite
+npm run lint     # prettier formatting check
 ```
 
-# Tags
-| Tag | Description |
-| :----: | --- |
-| latest | Latest version |
-| legacy | Legacy version |
+## Tech stack
 
-## Project Screenshot
+React · TypeScript · Tailwind CSS · Create React App
 
-![image](https://user-images.githubusercontent.com/4349962/158677511-50faa60b-26a1-4880-a580-b433389f03aa.png)
+## Credits
 
-## Original Project
-[Cwackerfuss/React-Wordle](https://github.com/cwackerfuss/react-wordle)
+Built on top of [react-wordle](https://github.com/cwackerfuss/react-wordle) by Hannah Park, an open-source clone of the word game popularized by the New York Times. The Practice and Timed modes and the Game Mode menu were added on top of that base.
+
+## License
+
+[MIT](LICENSE). The original react-wordle copyright notice is retained in the `LICENSE` file.
