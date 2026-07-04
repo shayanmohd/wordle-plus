@@ -3,6 +3,7 @@ import {
   ChartBarIcon,
   CogIcon,
   InformationCircleIcon,
+  PuzzleIcon,
 } from '@heroicons/react/outline'
 
 import { ENABLE_ARCHIVED_GAMES } from '../../constants/settings'
@@ -13,6 +14,7 @@ type Props = {
   setIsStatsModalOpen: (value: boolean) => void
   setIsDatePickerModalOpen: (value: boolean) => void
   setIsSettingsModalOpen: (value: boolean) => void
+  setIsGameModeModalOpen: (value: boolean) => void
 }
 
 export const Navbar = ({
@@ -20,6 +22,7 @@ export const Navbar = ({
   setIsStatsModalOpen,
   setIsDatePickerModalOpen,
   setIsSettingsModalOpen,
+  setIsGameModeModalOpen,
 }: Props) => {
   return (
     <div className="navbar">
@@ -28,6 +31,10 @@ export const Navbar = ({
           <InformationCircleIcon
             className="h-6 w-6 cursor-pointer dark:stroke-white"
             onClick={() => setIsInfoModalOpen(true)}
+          />
+          <PuzzleIcon
+            className="ml-3 h-6 w-6 cursor-pointer dark:stroke-white"
+            onClick={() => setIsGameModeModalOpen(true)}
           />
           {ENABLE_ARCHIVED_GAMES && (
             <CalendarIcon

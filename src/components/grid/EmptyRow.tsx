@@ -1,8 +1,11 @@
-import { solution } from '../../lib/words'
 import { Cell } from './Cell'
 
-export const EmptyRow = () => {
-  const emptyCells = Array.from(Array(solution.length))
+type Props = {
+  solutionLength: number
+}
+
+export const EmptyRow = ({ solutionLength }: Props) => {
+  const emptyCells = Array.from(Array(solutionLength))
 
   return (
     <div className="mb-1 flex justify-center">

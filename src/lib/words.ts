@@ -26,14 +26,14 @@ export const isWordInWordList = (word: string) => {
   )
 }
 
-export const isWinningWord = (word: string) => {
-  return solution === word
-}
-
 // build a set of previously revealed letters - present and correct
 // guess must use correct letters in that space and any other revealed letters
 // also check if all revealed instances of a letter are used (i.e. two C's)
-export const findFirstUnusedReveal = (word: string, guesses: string[]) => {
+export const findFirstUnusedReveal = (
+  word: string,
+  guesses: string[],
+  solution: string
+) => {
   if (guesses.length === 0) {
     return false
   }
@@ -174,6 +174,25 @@ export const getIsLatestGame = () => {
   }
   const parsed = queryString.parse(window.location.search)
   return parsed === null || !('d' in parsed)
+}
+
+export const getRandomWord = () => {
+  return localeAwareUpperCase(WORDS[Math.floor(Math.random() * WORDS.length)])
+}
+
+export const getIsPracticeMode = () => {
+  const parsed = queryString.parse(window.location.search)
+  return parsed !== null && parsed.mode === 'practice'
+}
+
+export const setPracticeModeUrl = (isPractice: boolean) => {
+  const url = new URL(window.location.href)
+  if (isPractice) {
+    url.searchParams.set('mode', 'practice')
+  } else {
+    url.searchParams.delete('mode')
+  }
+  window.history.replaceState({}, '', url.toString())
 }
 
 export const { solution, solutionGameDate, solutionIndex, tomorrow } =

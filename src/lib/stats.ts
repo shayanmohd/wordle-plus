@@ -1,16 +1,16 @@
 import { MAX_CHALLENGES } from '../constants/settings'
 import {
   GameStats,
+  loadPracticeStatsFromLocalStorage,
   loadStatsFromLocalStorage,
+  removePracticeStatsFromLocalStorage,
+  savePracticeStatsToLocalStorage,
   saveStatsToLocalStorage,
 } from './localStorage'
 
 // In stats array elements 0-5 are successes in 1-6 trys
 
-export const addStatsForCompletedGame = (
-  gameStats: GameStats,
-  count: number
-) => {
+const computeUpdatedStats = (gameStats: GameStats, count: number) => {
   // Count is number of incorrect guesses before end.
   const stats = { ...gameStats }
 
@@ -30,22 +30,49 @@ export const addStatsForCompletedGame = (
   }
 
   stats.successRate = getSuccessRate(stats)
+  return stats
+}
 
+export const addStatsForCompletedGame = (
+  gameStats: GameStats,
+  count: number
+) => {
+  const stats = computeUpdatedStats(gameStats, count)
   saveStatsToLocalStorage(stats)
   return stats
 }
 
-const defaultStats: GameStats = {
+export const addStatsForCompletedPracticeGame = (
+  gameStats: GameStats,
+  count: number
+) => {
+  const stats = computeUpdatedStats(gameStats, count)
+  savePracticeStatsToLocalStorage(stats)
+  return stats
+}
+
+const makeDefaultStats = (): GameStats => ({
   winDistribution: Array.from(new Array(MAX_CHALLENGES), () => 0),
   gamesFailed: 0,
   currentStreak: 0,
   bestStreak: 0,
   totalGames: 0,
   successRate: 0,
-}
+})
+
+const defaultStats: GameStats = makeDefaultStats()
 
 export const loadStats = () => {
   return loadStatsFromLocalStorage() || defaultStats
+}
+
+export const loadPracticeStats = () => {
+  return loadPracticeStatsFromLocalStorage() || makeDefaultStats()
+}
+
+export const resetPracticeStats = () => {
+  removePracticeStatsFromLocalStorage()
+  return makeDefaultStats()
 }
 
 const getSuccessRate = (gameStats: GameStats) => {

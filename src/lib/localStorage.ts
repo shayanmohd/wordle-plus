@@ -1,5 +1,6 @@
 const gameStateKey = 'gameState'
 const archiveGameStateKey = 'archiveGameState'
+const practiceGameStateKey = 'practiceGameState'
 const highContrastKey = 'highContrast'
 
 export type StoredGameState = {
@@ -21,7 +22,19 @@ export const loadGameStateFromLocalStorage = (isLatestGame: boolean) => {
   return state ? (JSON.parse(state) as StoredGameState) : null
 }
 
+export const savePracticeGameStateToSessionStorage = (
+  gameState: StoredGameState
+) => {
+  sessionStorage.setItem(practiceGameStateKey, JSON.stringify(gameState))
+}
+
+export const loadPracticeGameStateFromSessionStorage = () => {
+  const state = sessionStorage.getItem(practiceGameStateKey)
+  return state ? (JSON.parse(state) as StoredGameState) : null
+}
+
 const gameStatKey = 'gameStats'
+const practiceGameStatKey = 'practiceGameStats'
 
 export type GameStats = {
   winDistribution: number[]
@@ -39,6 +52,19 @@ export const saveStatsToLocalStorage = (gameStats: GameStats) => {
 export const loadStatsFromLocalStorage = () => {
   const stats = localStorage.getItem(gameStatKey)
   return stats ? (JSON.parse(stats) as GameStats) : null
+}
+
+export const savePracticeStatsToLocalStorage = (gameStats: GameStats) => {
+  localStorage.setItem(practiceGameStatKey, JSON.stringify(gameStats))
+}
+
+export const loadPracticeStatsFromLocalStorage = () => {
+  const stats = localStorage.getItem(practiceGameStatKey)
+  return stats ? (JSON.parse(stats) as GameStats) : null
+}
+
+export const removePracticeStatsFromLocalStorage = () => {
+  localStorage.removeItem(practiceGameStatKey)
 }
 
 export const setStoredIsHighContrastMode = (isHighContrast: boolean) => {

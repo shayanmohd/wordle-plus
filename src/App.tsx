@@ -10,13 +10,16 @@ import { AlertContainer } from './components/alerts/AlertContainer'
 import { Grid } from './components/grid/Grid'
 import { Keyboard } from './components/keyboard/Keyboard'
 import { DatePickerModal } from './components/modals/DatePickerModal'
+import { GameModeModal } from './components/modals/GameModeModal'
 import { InfoModal } from './components/modals/InfoModal'
 import { MigrateStatsModal } from './components/modals/MigrateStatsModal'
+import { PracticeStatsModal } from './components/modals/PracticeStatsModal'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { StatsModal } from './components/modals/StatsModal'
 import { Navbar } from './components/navbar/Navbar'
 import {
   DATE_LOCALE,
+  DEFAULT_TIMER_SECONDS,
   DISCOURAGE_INAPP_BROWSERS,
   LONG_ALERT_TIME_MS,
   MAX_CHALLENGES,
@@ -29,7 +32,10 @@ import {
   GAME_COPIED_MESSAGE,
   HARD_MODE_ALERT_MESSAGE,
   NOT_ENOUGH_LETTERS_MESSAGE,
+  PRACTICE_STATS_RESET_MESSAGE,
   SHARE_FAILURE_TEXT,
+  TIMED_MODE_ALERT_MESSAGE,
+  TIME_UP_MESSAGE,
   WIN_MESSAGES,
   WORD_NOT_FOUND_MESSAGE,
 } from './constants/strings'
@@ -38,18 +44,28 @@ import { isInAppBrowser } from './lib/browser'
 import {
   getStoredIsHighContrastMode,
   loadGameStateFromLocalStorage,
+  loadPracticeGameStateFromSessionStorage,
   saveGameStateToLocalStorage,
+  savePracticeGameStateToSessionStorage,
   setStoredIsHighContrastMode,
 } from './lib/localStorage'
-import { addStatsForCompletedGame, loadStats } from './lib/stats'
 import {
+  addStatsForCompletedGame,
+  addStatsForCompletedPracticeGame,
+  loadPracticeStats,
+  loadStats,
+  resetPracticeStats,
+} from './lib/stats'
+import {
+  solution as dailySolution,
   findFirstUnusedReveal,
   getGameDate,
   getIsLatestGame,
-  isWinningWord,
+  getIsPracticeMode,
+  getRandomWord,
   isWordInWordList,
   setGameDate,
-  solution,
+  setPracticeModeUrl,
   solutionGameDate,
   unicodeLength,
 } from './lib/words'
@@ -63,6 +79,15 @@ function App() {
 
   const { showError: showErrorAlert, showSuccess: showSuccessAlert } =
     useAlert()
+  const [initialPracticeMode] = useState(() => getIsPracticeMode())
+  const [isPracticeMode, setIsPracticeMode] = useState(initialPracticeMode)
+  const [currentSolution, setCurrentSolution] = useState(() => {
+    if (initialPracticeMode) {
+      const loaded = loadPracticeGameStateFromSessionStorage()
+      return loaded?.solution ?? getRandomWord()
+    }
+    return dailySolution
+  })
   const [currentGuess, setCurrentGuess] = useState('')
   const [isGameWon, setIsGameWon] = useState(false)
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
@@ -70,6 +95,7 @@ function App() {
   const [isDatePickerModalOpen, setIsDatePickerModalOpen] = useState(false)
   const [isMigrateStatsModalOpen, setIsMigrateStatsModalOpen] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isGameModeModalOpen, setIsGameModeModalOpen] = useState(false)
   const [currentRowClass, setCurrentRowClass] = useState('')
   const [isGameLost, setIsGameLost] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(
@@ -84,17 +110,19 @@ function App() {
   )
   const [isRevealing, setIsRevealing] = useState(false)
   const [guesses, setGuesses] = useState<string[]>(() => {
-    const loaded = loadGameStateFromLocalStorage(isLatestGame)
-    if (loaded?.solution !== solution) {
+    const loaded = initialPracticeMode
+      ? loadPracticeGameStateFromSessionStorage()
+      : loadGameStateFromLocalStorage(isLatestGame)
+    if (loaded?.solution !== currentSolution) {
       return []
     }
-    const gameWasWon = loaded.guesses.includes(solution)
+    const gameWasWon = loaded.guesses.includes(currentSolution)
     if (gameWasWon) {
       setIsGameWon(true)
     }
     if (loaded.guesses.length === MAX_CHALLENGES && !gameWasWon) {
       setIsGameLost(true)
-      showErrorAlert(CORRECT_WORD_MESSAGE(solution), {
+      showErrorAlert(CORRECT_WORD_MESSAGE(currentSolution), {
         persist: true,
       })
     }
@@ -102,12 +130,23 @@ function App() {
   })
 
   const [stats, setStats] = useState(() => loadStats())
+  const [practiceStats, setPracticeStats] = useState(() => loadPracticeStats())
 
   const [isHardMode, setIsHardMode] = useState(
     localStorage.getItem('gameMode')
       ? localStorage.getItem('gameMode') === 'hard'
       : false
   )
+
+  const [isTimedMode, setIsTimedMode] = useState(
+    localStorage.getItem('timedMode') === 'true'
+  )
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(() => {
+    const stored = localStorage.getItem('timeLimitSeconds')
+    return stored ? parseInt(stored, 10) : DEFAULT_TIMER_SECONDS
+  })
+  const [timerStarted, setTimerStarted] = useState(false)
+  const [timeRemaining, setTimeRemaining] = useState(timeLimitSeconds)
 
   useEffect(() => {
     // if no game state on load,
@@ -148,7 +187,7 @@ function App() {
   }
 
   const handleHardMode = (isHard: boolean) => {
-    if (guesses.length === 0 || localStorage.getItem('gameMode') === 'hard') {
+    if (guesses.length === 0) {
       setIsHardMode(isHard)
       localStorage.setItem('gameMode', isHard ? 'hard' : 'normal')
     } else {
@@ -161,19 +200,129 @@ function App() {
     setStoredIsHighContrastMode(isHighContrast)
   }
 
+  const resetGameState = () => {
+    setCurrentGuess('')
+    setIsGameWon(false)
+    setIsGameLost(false)
+    setIsRevealing(false)
+    setCurrentRowClass('')
+  }
+
+  const handleStartPractice = () => {
+    const word = getRandomWord()
+    setIsPracticeMode(true)
+    setPracticeModeUrl(true)
+    setCurrentSolution(word)
+    setGuesses([])
+    resetGameState()
+    setTimerStarted(false)
+    setIsGameModeModalOpen(false)
+  }
+
+  const handleNewPracticeWord = () => {
+    const word = getRandomWord()
+    setCurrentSolution(word)
+    setGuesses([])
+    resetGameState()
+    sessionStorage.removeItem('practiceGameState')
+  }
+
+  const handleStartDaily = (isTimed: boolean, seconds: number) => {
+    if (!isPracticeMode && guesses.length > 0 && !isGameWon && !isGameLost) {
+      showErrorAlert(TIMED_MODE_ALERT_MESSAGE)
+      setIsGameModeModalOpen(false)
+      return
+    }
+    localStorage.setItem('timedMode', isTimed ? 'true' : 'false')
+    localStorage.setItem('timeLimitSeconds', String(seconds))
+    setIsTimedMode(isTimed)
+    setTimeLimitSeconds(seconds)
+    setTimeRemaining(seconds)
+    setTimerStarted(false)
+    if (isPracticeMode) {
+      // Switching back from practice to daily
+      setIsPracticeMode(false)
+      setPracticeModeUrl(false)
+      setCurrentSolution(dailySolution)
+      resetGameState()
+      // Restore daily game state
+      const loaded = loadGameStateFromLocalStorage(isLatestGame)
+      if (loaded?.solution === dailySolution) {
+        setGuesses(loaded.guesses)
+        const gameWasWon = loaded.guesses.includes(dailySolution)
+        if (gameWasWon) {
+          setIsGameWon(true)
+        } else if (loaded.guesses.length === MAX_CHALLENGES) {
+          setIsGameLost(true)
+        }
+      } else {
+        setGuesses([])
+      }
+    }
+    setIsGameModeModalOpen(false)
+  }
+
+  const handleResetPracticeStats = () => {
+    setPracticeStats(resetPracticeStats())
+    showSuccessAlert(PRACTICE_STATS_RESET_MESSAGE)
+  }
+
   const clearCurrentRowClass = () => {
     setCurrentRowClass('')
   }
 
   useEffect(() => {
-    saveGameStateToLocalStorage(getIsLatestGame(), { guesses, solution })
-  }, [guesses])
+    if (isPracticeMode) {
+      savePracticeGameStateToSessionStorage({
+        guesses,
+        solution: currentSolution,
+      })
+    } else {
+      saveGameStateToLocalStorage(getIsLatestGame(), {
+        guesses,
+        solution: currentSolution,
+      })
+    }
+  }, [guesses, isPracticeMode, currentSolution])
+
+  // Timed mode countdown (daily game only)
+  useEffect(() => {
+    if (
+      isPracticeMode ||
+      !isTimedMode ||
+      !timerStarted ||
+      isGameWon ||
+      isGameLost
+    ) {
+      return
+    }
+    if (timeRemaining <= 0) {
+      if (isLatestGame) {
+        setStats((s) => addStatsForCompletedGame(s, MAX_CHALLENGES))
+      }
+      setIsGameLost(true)
+      showErrorAlert(TIME_UP_MESSAGE(currentSolution), { persist: true })
+      return
+    }
+    const id = setTimeout(() => setTimeRemaining((t) => t - 1), 1000)
+    return () => clearTimeout(id)
+  }, [
+    isPracticeMode,
+    isTimedMode,
+    timerStarted,
+    timeRemaining,
+    isGameWon,
+    isGameLost,
+    isLatestGame,
+    showErrorAlert,
+    currentSolution,
+  ])
 
   useEffect(() => {
     if (isGameWon) {
       const winMessage =
         WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)]
-      const delayMs = REVEAL_TIME_MS * solution.length
+      const delayMs = REVEAL_TIME_MS * currentSolution.length
 
       showSuccessAlert(winMessage, {
         delayMs,
@@ -184,16 +333,20 @@ function App() {
     if (isGameLost) {
       setTimeout(() => {
         setIsStatsModalOpen(true)
-      }, (solution.length + 1) * REVEAL_TIME_MS)
+      }, (currentSolution.length + 1) * REVEAL_TIME_MS)
     }
-  }, [isGameWon, isGameLost, showSuccessAlert])
+  }, [isGameWon, isGameLost, showSuccessAlert, currentSolution])
 
   const onChar = (value: string) => {
     if (
-      unicodeLength(`${currentGuess}${value}`) <= solution.length &&
+      unicodeLength(`${currentGuess}${value}`) <= currentSolution.length &&
       guesses.length < MAX_CHALLENGES &&
-      !isGameWon
+      !isGameWon &&
+      !isGameLost
     ) {
+      if (!isPracticeMode && isTimedMode && !timerStarted) {
+        setTimerStarted(true)
+      }
       setCurrentGuess(`${currentGuess}${value}`)
     }
   }
@@ -209,7 +362,7 @@ function App() {
       return
     }
 
-    if (!(unicodeLength(currentGuess) === solution.length)) {
+    if (!(unicodeLength(currentGuess) === currentSolution.length)) {
       setCurrentRowClass('jiggle')
       return showErrorAlert(NOT_ENOUGH_LETTERS_MESSAGE, {
         onClose: clearCurrentRowClass,
@@ -225,7 +378,11 @@ function App() {
 
     // enforce hard mode - all guesses must contain all previously revealed letters
     if (isHardMode) {
-      const firstMissingReveal = findFirstUnusedReveal(currentGuess, guesses)
+      const firstMissingReveal = findFirstUnusedReveal(
+        currentGuess,
+        guesses,
+        currentSolution
+      )
       if (firstMissingReveal) {
         setCurrentRowClass('jiggle')
         return showErrorAlert(firstMissingReveal, {
@@ -239,12 +396,12 @@ function App() {
     // chars have been revealed
     setTimeout(() => {
       setIsRevealing(false)
-    }, REVEAL_TIME_MS * solution.length)
+    }, REVEAL_TIME_MS * currentSolution.length)
 
-    const winningWord = isWinningWord(currentGuess)
+    const winningWord = currentGuess === currentSolution
 
     if (
-      unicodeLength(currentGuess) === solution.length &&
+      unicodeLength(currentGuess) === currentSolution.length &&
       guesses.length < MAX_CHALLENGES &&
       !isGameWon
     ) {
@@ -252,20 +409,28 @@ function App() {
       setCurrentGuess('')
 
       if (winningWord) {
-        if (isLatestGame) {
+        if (isPracticeMode) {
+          setPracticeStats(
+            addStatsForCompletedPracticeGame(practiceStats, guesses.length)
+          )
+        } else if (isLatestGame) {
           setStats(addStatsForCompletedGame(stats, guesses.length))
         }
         return setIsGameWon(true)
       }
 
       if (guesses.length === MAX_CHALLENGES - 1) {
-        if (isLatestGame) {
+        if (isPracticeMode) {
+          setPracticeStats(
+            addStatsForCompletedPracticeGame(practiceStats, guesses.length + 1)
+          )
+        } else if (isLatestGame) {
           setStats(addStatsForCompletedGame(stats, guesses.length + 1))
         }
         setIsGameLost(true)
-        showErrorAlert(CORRECT_WORD_MESSAGE(solution), {
+        showErrorAlert(CORRECT_WORD_MESSAGE(currentSolution), {
           persist: true,
-          delayMs: REVEAL_TIME_MS * solution.length + 1,
+          delayMs: REVEAL_TIME_MS * currentSolution.length + 1,
         })
       }
     }
@@ -279,9 +444,43 @@ function App() {
           setIsStatsModalOpen={setIsStatsModalOpen}
           setIsDatePickerModalOpen={setIsDatePickerModalOpen}
           setIsSettingsModalOpen={setIsSettingsModalOpen}
+          setIsGameModeModalOpen={setIsGameModeModalOpen}
         />
 
-        {!isLatestGame && (
+        {isPracticeMode && (
+          <div className="flex items-center justify-center gap-3 py-1">
+            <p className="text-base font-medium text-gray-600 dark:text-gray-300">
+              Practice Mode
+            </p>
+            {(isGameWon || isGameLost) && (
+              <button
+                type="button"
+                className="rounded-md border border-transparent bg-indigo-600 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none"
+                onClick={handleNewPracticeWord}
+              >
+                New Word
+              </button>
+            )}
+          </div>
+        )}
+
+        {!isPracticeMode && isTimedMode && (
+          <div className="flex items-center justify-center py-1">
+            <ClockIcon className="mr-1 h-5 w-5 stroke-gray-600 dark:stroke-gray-300" />
+            <p
+              className={`text-base font-medium ${
+                timeRemaining <= 10 && timerStarted
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              {Math.floor(timeRemaining / 60)}:
+              {(timeRemaining % 60).toString().padStart(2, '0')}
+            </p>
+          </div>
+        )}
+
+        {!isPracticeMode && !isLatestGame && (
           <div className="flex items-center justify-center">
             <ClockIcon className="h-6 w-6 stroke-gray-600 dark:stroke-gray-300" />
             <p className="text-base text-gray-600 dark:text-gray-300">
@@ -293,7 +492,7 @@ function App() {
         <div className="mx-auto flex w-full grow flex-col px-1 pt-2 pb-8 sm:px-6 md:max-w-7xl lg:px-8 short:pb-2 short:pt-2">
           <div className="flex grow flex-col justify-center pb-6 short:pb-2">
             <Grid
-              solution={solution}
+              solution={currentSolution}
               guesses={guesses}
               currentGuess={currentGuess}
               isRevealing={isRevealing}
@@ -304,7 +503,7 @@ function App() {
             onChar={onChar}
             onDelete={onDelete}
             onEnter={onEnter}
-            solution={solution}
+            solution={currentSolution}
             guesses={guesses}
             isRevealing={isRevealing}
           />
@@ -312,30 +511,54 @@ function App() {
             isOpen={isInfoModalOpen}
             handleClose={() => setIsInfoModalOpen(false)}
           />
-          <StatsModal
-            isOpen={isStatsModalOpen}
-            handleClose={() => setIsStatsModalOpen(false)}
-            solution={solution}
-            guesses={guesses}
-            gameStats={stats}
-            isLatestGame={isLatestGame}
-            isGameLost={isGameLost}
-            isGameWon={isGameWon}
-            handleShareToClipboard={() => showSuccessAlert(GAME_COPIED_MESSAGE)}
-            handleShareFailure={() =>
-              showErrorAlert(SHARE_FAILURE_TEXT, {
-                durationMs: LONG_ALERT_TIME_MS,
-              })
-            }
-            handleMigrateStatsButton={() => {
-              setIsStatsModalOpen(false)
-              setIsMigrateStatsModalOpen(true)
-            }}
-            isHardMode={isHardMode}
-            isDarkMode={isDarkMode}
-            isHighContrastMode={isHighContrastMode}
-            numberOfGuessesMade={guesses.length}
+          <GameModeModal
+            isOpen={isGameModeModalOpen}
+            handleClose={() => setIsGameModeModalOpen(false)}
+            isPracticeMode={isPracticeMode}
+            isTimedMode={isTimedMode}
+            timeLimitSeconds={timeLimitSeconds}
+            handleStartDaily={handleStartDaily}
+            handleStartPractice={handleStartPractice}
           />
+          {isPracticeMode ? (
+            <PracticeStatsModal
+              isOpen={isStatsModalOpen}
+              handleClose={() => setIsStatsModalOpen(false)}
+              gameStats={practiceStats}
+              isGameWon={isGameWon}
+              isGameLost={isGameLost}
+              numberOfGuessesMade={guesses.length}
+              handleResetStats={handleResetPracticeStats}
+              handleNewPracticeWord={handleNewPracticeWord}
+            />
+          ) : (
+            <StatsModal
+              isOpen={isStatsModalOpen}
+              handleClose={() => setIsStatsModalOpen(false)}
+              solution={currentSolution}
+              guesses={guesses}
+              gameStats={stats}
+              isLatestGame={isLatestGame}
+              isGameLost={isGameLost}
+              isGameWon={isGameWon}
+              handleShareToClipboard={() =>
+                showSuccessAlert(GAME_COPIED_MESSAGE)
+              }
+              handleShareFailure={() =>
+                showErrorAlert(SHARE_FAILURE_TEXT, {
+                  durationMs: LONG_ALERT_TIME_MS,
+                })
+              }
+              handleMigrateStatsButton={() => {
+                setIsStatsModalOpen(false)
+                setIsMigrateStatsModalOpen(true)
+              }}
+              isHardMode={isHardMode}
+              isDarkMode={isDarkMode}
+              isHighContrastMode={isHighContrastMode}
+              numberOfGuessesMade={guesses.length}
+            />
+          )}
           <DatePickerModal
             isOpen={isDatePickerModalOpen}
             initialDate={solutionGameDate}
